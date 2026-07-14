@@ -1,0 +1,19 @@
+# Claude local settings
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs & temp
+*.log
+*.tmp
+
+# Editor
+.vscode/
+.idea/
