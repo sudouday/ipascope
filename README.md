@@ -4,7 +4,7 @@ iOS static security analysis that runs entirely in your browser. Drop an `.ipa`,
 
 **v0.4.0** — Liquid Glass redesign. See `CHANGELOG.md`.
 
-Live: **[ipascope.com](https://ipascope.com)**
+Live: **[ipascope.com](https://ipascope.in)**
 
 ![IPAScope](docs/screenshots/landing-dark.png)
 
