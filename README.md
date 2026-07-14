@@ -91,4 +91,4 @@ This is a static scanner. Pattern matching plus header parsing. It will miss thi
 
 ## Author
 
-[Uday Shelke]
+Uday Shelke & Saurabh Sanmane
