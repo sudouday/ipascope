@@ -88,15 +88,7 @@ The file you drop is read into memory in the tab and never leaves it. No telemet
 
 This is a static scanner. Pattern matching plus header parsing. It will miss things a dynamic analysis would catch, and it will produce false positives. Treat the output as a first pass that you triage manually.
 
-## License
-
-[CC BY-NC-ND 4.0](LICENSE)
 
 ## Author
 
-[Sandeep Wawdane](https://github.com/thecybersandeep) · [LinkedIn](https://www.linkedin.com/in/sandeepwawdane/)
-
-## Sister tools
-
-- [APK Auditor](https://apkauditor.com) - drag-drop Android APK static analyzer
-- [ADB Auditor](https://adbauditor.com) - live Android audit over WebUSB and ADB
+[Uday Shelke]
