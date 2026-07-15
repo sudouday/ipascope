@@ -1,6 +1,4 @@
-const onMsg = (e) => {
-            try{console.log('[IPAScope DEBUG] worker -> main message', e && e.data && e.data.type); }catch(_e){}
-            const payload = e.data || {}; (function () {
+(function () {
 'use strict';
 
 const IPAS = window.IPAS = window.IPAS || {};
