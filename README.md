@@ -1,7 +1,5 @@
 # IPAScope
 
-![IPAScope - Dark](docs/screenshots/landing-dark.png)
-
 iOS static security analysis that runs entirely in your browser. Drop an `.ipa` file and get a concise report — no backend required.
 
 **Current release:** v0.5.0
