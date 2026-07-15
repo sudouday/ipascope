@@ -892,3 +892,11 @@ a { color: inherit; }
 .reactor-wrap .arc-reactor{ position: relative; z-index:2; }
 @media (max-width:900px){ .hero-inner{ grid-template-columns: 1fr; } .reactor-wrap{ margin: 18px auto; } }
 @media (prefers-reduced-motion: reduce){ .arc-reactor, #reactor-particles{ animation: none !important; } }
+/* Dropzone + reactor integration (feature/arc-reactor) */
+.dropzone { display: flex; align-items: center; gap: 22px; padding: 28px 36px; }
+.dropzone .reactor-drop{ flex: 0 0 140px; width: 140px; height:140px; display:flex; align-items:center; justify-content:center; }
+.dropzone .arc-reactor.small{ width: 120px; height:120px; filter: drop-shadow(0 12px 30px rgba(0,0,0,0.32)); }
+.dropzone .dropzone-body{ flex:1; text-align:left; }
+.dropzone .dropzone-title{ font-size: 20px; font-weight:700; color:var(--text-primary); }
+.dropzone .dropzone-sub { color:var(--text-muted); margin-top:6px; }
+@media (max-width:900px){ .dropzone{ flex-direction: column; align-items:center; } .dropzone .dropzone-body{ text-align:center; } }

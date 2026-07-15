@@ -1455,12 +1455,16 @@ a { color: inherit; }
             <div class="hero-visual">
     <div class="reactor-wrap" aria-hidden="true">
       <img class="arc-reactor" src="docs/animations/arc-reactor.svg" alt="Arc reactor animation" loading="lazy" />
-      <canvas id="reactor-particles" aria-hidden="true"></canvas>
+      <canvas class="reactor-particles" aria-hidden="true"></canvas>
     </div>
                 <div class="dropzone" id="dropZone" role="button" tabindex="0" aria-label="Drop IPA file or click to select">
                     <div class="scanner-grid" aria-hidden="true"></div>
                     <div class="scanner-sweep" aria-hidden="true"></div>
                     <div class="dropzone-body">
+      <div class="reactor-drop" aria-hidden="true">
+        <img class="arc-reactor small" src="docs/animations/arc-reactor.svg" alt="Arc reactor" loading="lazy" />
+        <canvas class="reactor-particles dropzone-canvas" aria-hidden="true"></canvas>
+      </div>
                         <div class="scanner-reticle" aria-hidden="true">
                             <span class="reticle-ring"></span>
                             <span class="reticle-ring reticle-ring-2"></span>
