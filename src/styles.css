@@ -317,17 +317,7 @@ a { color: inherit; }
     inherits: false;
     initial-value: 0deg;
 }
-.dropzone {
-    position: relative;
-    background: var(--bg-card);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-xl);
-    cursor: pointer; overflow: hidden;
-    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease, box-shadow 0.25s ease;
-    box-shadow: var(--shadow-card);
-}
+.dropzone{ display:flex; align-items:center; gap:14px; padding:12px 18px; border-radius:20px; }
 .dropzone:hover, .dropzone:focus-visible { transform: translateY(-3px); border-color: var(--border-hover); box-shadow: var(--shadow-elev); }
 .dropzone.drag-over { transform: scale(1.008); border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary), var(--shadow-elev); }
 .dropzone-body {
@@ -893,13 +883,16 @@ a { color: inherit; }
 @media (max-width:900px){ .hero-inner{ grid-template-columns: 1fr; } .reactor-wrap{ margin: 18px auto; } }
 @media (prefers-reduced-motion: reduce){ .arc-reactor, #reactor-particles{ animation: none !important; } }
 /* Dropzone + reactor integration (feature/arc-reactor) */
-.dropzone { display: flex; align-items: center; gap: 22px; padding: 28px 36px; }
-.dropzone .reactor-drop{ flex: 0 0 110px; width:110px; height:110px; display:flex; align-items:center; justify-content:center; }
-.dropzone .arc-reactor.small{ width: 96px; height:96px; filter: drop-shadow(0 12px 30px rgba(0,0,0,0.32)); }
+.dropzone{ display:flex; align-items:center; gap:14px; padding:12px 18px; border-radius:20px; }
+.dropzone .reactor-drop{ flex: 0 0 72px; width:72px; height:72px; display:flex; align-items:center; justify-content:center; }
+.dropzone .arc-reactor.small{ width: 64px; height:64px; filter: drop-shadow(0 12px 30px rgba(0,0,0,0.32)); }
 .dropzone .dropzone-body{ flex:1; text-align:left; }
-.dropzone .dropzone-title{ font-size:16px; font-weight:600; color:var(--text-primary); }
+.dropzone .dropzone-title{ font-size:15px; font-weight:600; color:var(--text-primary); margin:0; }
 .dropzone .dropzone-sub { color:var(--text-muted); margin-top:6px; }
-@media (max-width:900px){ .dropzone{ flex-direction: column; align-items:center; } .dropzone .dropzone-body{ text-align:center; } }
+@media (max-width:900px){ .dropzone{ display:flex; align-items:center; gap:14px; padding:12px 18px; border-radius:20px; } .dropzone .dropzone-body{ text-align:center; } }
 
 /* Hide any remaining hero reactor markup */
 .hero .reactor-wrap{ display:none !important; }
+
+/* Hide reticle/plus icon animations in dropzone */
+.scanner-reticle, .reticle-ring, .scanner-reticle * { display: none !important; animation: none !important; }
