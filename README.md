@@ -6,6 +6,7 @@ iOS static security analysis that runs entirely in your browser. Drop an `.ipa`,
 
 Live: **[ipascope.com](https://ipascope.com)**
 
+## Dark mode 
 ![IPAScope](docs/screenshots/landing-dark.png)
 
 ## What it does
