@@ -6,7 +6,7 @@ iOS static security analysis that runs entirely in your browser. Drop an `.ipa`,
 
 Live: **[ipascope.com](https://ipascope.com)**
 
-![IPAScope](docs/screenshots/landing-dark.png)
+![IPAScope](fix/Landing_dark.png)
 
 ## What it does
 
@@ -23,7 +23,7 @@ Parses the bundle, the Mach-O executable, the embedded provisioning profile and 
 
 ## Light mode
 
-![Light theme landing page](docs/screenshots/landing-light.png)
+![Light theme landing page](fix/Landing_light.png)
 
 ## Run it
 
