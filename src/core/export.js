@@ -9,6 +9,9 @@
 //     cosmetic, not a finding
 // Nothing here re-hosts the original .ipa or its raw bytes — those were never
 // part of the in-memory `results` object to begin with.
+// Human-readable severity labels for the internal keys (matches the app UI).
+var SEV_LABEL = { high: 'High', warning: 'Medium', info: 'Low', secure: 'Info' };
+
 function buildShareable(results) {
     const { macho, ...rest } = results;
     let shareable = { ...rest, shared: true };
@@ -81,7 +84,7 @@ function toCSV(results) {
     ];
     for (const f of results.findings) {
         rows.push([
-            f.severity, f.confidence ?? '', f.ruleId, f.ruleName, f.category || '',
+            SEV_LABEL[f.severity] || f.severity, f.confidence ?? '', f.ruleId, f.ruleName, f.category || '',
             f.cwe || '', f.owasp || '', f.masvs || '', f.mitre || '',
             f.file || '', f.line ?? '',
             (f.match || '').slice(0, 500),

@@ -48,6 +48,11 @@ function html(strings, ...values) {
 }
 const raw = (s) => ({ __raw: true, html: typeof s === 'string' ? s : String(s) });
 
+// Display labels for the internal severity keys (high/warning/info/secure).
+// Only the shown text changes; the underlying keys stay the same so filtering,
+// grouping, scoring and exports are unaffected.
+const SEV_LABEL = { high: 'High', warning: 'Medium', info: 'Low', secure: 'Info' };
+
 function fmtSize(b) {
     if (b == null) return '?';
     const u = ['B','KB','MB','GB'];
@@ -55,7 +60,7 @@ function fmtSize(b) {
     while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
     return b.toFixed(b < 10 && i > 0 ? 2 : 1) + ' ' + u[i];
 }
-function toast(message, type) {
+function toast(message, type, duration) {
     const c = document.getElementById('toastContainer') || (() => {
         const d = document.createElement('div');
         d.id = 'toastContainer'; d.className = 'toast-container';
@@ -67,7 +72,49 @@ function toast(message, type) {
     t.setAttribute('role', 'status');
     t.textContent = message;
     c.appendChild(t);
-    setTimeout(() => t.remove(), 4500);
+    setTimeout(() => t.remove(), duration || 4500);
+}
+
+function showCenterPopup(message, duration) {
+    const existing = document.getElementById('centerPopup');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'center-popup-overlay';
+    overlay.id = 'centerPopup';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-live', 'assertive');
+    overlay.innerHTML =
+        '<div class="center-popup">' +
+            '<div class="center-popup-head">' +
+                '<span class="scan-console-dot"></span>' +
+                '<span class="scan-console-dot"></span>' +
+                '<span class="scan-console-dot"></span>' +
+                '<span class="center-popup-title">ipascope</span>' +
+            '</div>' +
+            '<div class="center-popup-body">' +
+                '<div class="center-popup-icon" aria-hidden="true">' +
+                    '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' +
+                        '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="center-popup-msg"></div>' +
+                '<div class="center-popup-hint">tap anywhere to dismiss</div>' +
+            '</div>' +
+        '</div>';
+    overlay.querySelector('.center-popup-msg').textContent = message;
+    document.body.appendChild(overlay);
+
+    let closed = false;
+    const dismiss = () => {
+        if (closed) return;
+        closed = true;
+        overlay.classList.add('closing');
+        setTimeout(() => overlay.remove(), 200);
+    };
+    overlay.addEventListener('click', dismiss);
+    setTimeout(dismiss, duration || 5500);
 }
 
 function setupWorker() {
@@ -88,6 +135,7 @@ function setupWorker() {
 
 async function analyzeFile(file) {
     document.body.classList.add('analyzing');
+    resetProgressLog();
     showProgress(0, 'Initializing…');
     State.currentFile = file;
     State.viewerZip = null;
@@ -156,20 +204,72 @@ async function getViewerZip() {
     return State.viewerZip;
 }
 
+function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+
+function resetProgressLog() {
+    const log = $('#progressLog');
+    if (log) log.innerHTML = '';
+    State._lastStage = null;
+    State._logStart = nowMs();
+    const pctEl = $('#progressPct');
+    if (pctEl) pctEl.textContent = '0%';
+    const fill = $('#progressFill');
+    if (fill) fill.style.width = '0%';
+}
+
 function showProgress(pct, text, payload) {
     const overlay = $('#loadingOverlay');
     const fill = $('#progressFill');
-    const tEl = $('#progressText');
-    const lEl = $('#loadingText');
-    const dEl = $('#progressDetail');
+    const pctEl = $('#progressPct');
+    const log = $('#progressLog');
     if (overlay) overlay.classList.add('active');
     if (fill) fill.style.width = (pct || 0) + '%';
-    if (tEl) tEl.textContent = text || '…';
-    if (lEl) lEl.textContent = 'Analyzing IPA…';
-    if (dEl && payload && payload.file) {
-        dEl.textContent = payload.current + ' / ' + payload.total + ' - ' + payload.file.split('/').pop();
-    } else if (dEl) {
-        dEl.textContent = '';
+    if (pctEl) pctEl.textContent = Math.round(pct || 0) + '%';
+    if (!log) return;
+
+    if (State._logStart == null) State._logStart = nowMs();
+    const stage = (payload && payload.stage) ? payload.stage : (text || '');
+    const secs = ((nowMs() - State._logStart) / 1000).toFixed(1);
+    const fileName = (payload && payload.file) ? payload.file.split('/').pop() : '';
+
+    let active = log.querySelector('.log-line.active');
+
+    if (stage !== State._lastStage) {
+        // finalize the previous stage line
+        if (active) {
+            active.classList.remove('active');
+            active.classList.add('done');
+            const ic = active.querySelector('.log-icon');
+            if (ic) ic.textContent = '✓'; // ✓
+        }
+        // append the new stage line
+        const line = document.createElement('div');
+        line.className = 'log-line active';
+        line.innerHTML = '<span class="log-time"></span><span class="log-icon">▸</span>' + // ▸
+                         '<span class="log-msg"></span><span class="log-file"></span>';
+        line.querySelector('.log-time').textContent = secs + 's';
+        line.querySelector('.log-msg').textContent = text || '…';
+        log.appendChild(line);
+        State._lastStage = stage;
+        active = line;
+        log.scrollTop = log.scrollHeight;
+    } else if (active) {
+        // same stage repeating (e.g. per-file scan) — update in place
+        const msgEl = active.querySelector('.log-msg');
+        if (msgEl) msgEl.textContent = text || '…';
+    }
+
+    if (active) {
+        const fEl = active.querySelector('.log-file');
+        if (fEl) fEl.textContent = fileName;
+    }
+
+    // finalize the last line on completion
+    if ((pct || 0) >= 100 && active) {
+        active.classList.remove('active');
+        active.classList.add('done');
+        const ic = active.querySelector('.log-icon');
+        if (ic) ic.textContent = '✓';
     }
 }
 function hideProgress() {
@@ -181,10 +281,14 @@ function hideProgress() {
 async function startAnalysis(file) {
     if (!file) return;
     if (!/\.ipa$/i.test(file.name) && !/\.zip$/i.test(file.name)) {
-        toast('Please select a .ipa or .zip file', 'error'); return;
+        showCenterPopup('That doesn’t look like a valid .ipa. Please upload an iOS .ipa file and try again.', 5500); return;
     }
     try {
+        const _t0 = nowMs();
         const results = await analyzeFile(file);
+        const _elapsed = nowMs() - _t0;
+        // Keep the verbose console visible long enough to be seen on fast scans
+        if (_elapsed < 900) await new Promise(r => setTimeout(r, 900 - _elapsed));
         hideProgress();
         State.currentResults = results;
         renderAll(results);
@@ -193,7 +297,7 @@ async function startAnalysis(file) {
     } catch (e) {
         hideProgress();
         console.error(e);
-        toast('Analysis failed: ' + e.message, 'error');
+        showCenterPopup('That doesn’t look like a valid .ipa. Please upload an iOS .ipa file and try again.', 5500);
     }
 }
 
@@ -236,6 +340,30 @@ function renderHeader(r) {
     const ic = $('#appIcon');
     if (r.appIcon) ic.innerHTML = '<img src="' + escAttr(r.appIcon) + '" alt="">';
     else ic.innerHTML = '<span aria-hidden="true" style="font-size:24px;font-weight:700;color:#fff;">' + esc((r.appInfo?.appName || '?').charAt(0).toUpperCase()) + '</span>';
+
+    const badgesEl = $('#appBadges');
+    if (badgesEl) {
+        const archs = (r.machoSummary?.slices?.length
+            ? r.machoSummary.slices.map(s => s.arch)
+            : [r.machoSummary?.arch]).filter(Boolean);
+        const ICON = {
+            lang:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+            ios:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',
+            cpu:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>',
+            size:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+            xcode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+            check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+        };
+        const chips = [];
+        if (r.binType)            chips.push(['lang', r.binType]);
+        if (r.appInfo?.minOS)     chips.push(['ios', 'iOS ' + r.appInfo.minOS + '+']);
+        if (archs.length)         chips.push(['cpu', archs.join(' · ')]);
+        if (r.appInfo?.fileSize)  chips.push(['size', r.appInfo.fileSize]);
+        if (r.appInfo?.dtXcode)   chips.push(['xcode', 'Xcode ' + r.appInfo.dtXcode]);
+        let bh = chips.map(([k, label]) => html`<span class="app-badge">${raw(ICON[k])}${label}</span>`.toString()).join('');
+        bh += html`<span class="app-badge status">${raw(ICON.check)}Analyzed</span>`.toString();
+        badgesEl.innerHTML = bh;
+    }
 }
 function updateBadges(r) {
     const total = r.summary.high + r.summary.warning + r.summary.info + r.summary.secure;
@@ -252,27 +380,61 @@ function renderOverview(r) {
     const scoreClass = score >= 80 ? 'good' : score >= 60 ? 'ok' : score >= 40 ? 'meh' : 'bad';
 
     const scoreLabel = score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 50 ? 'Fair' : score >= 30 ? 'Poor' : 'Critical';
+    const grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
+    const totalChecks = high + warn + info + secure;
     $('#overviewStats').innerHTML = html`
-      <div class="stat-card score-card ${scoreClass}">
-        <div class="stat-card-header"><span class="stat-card-label">Security Score</span></div>
-        <div class="score-ring" style="--score:${score}" role="img" aria-label="Score ${score} of 100, ${scoreLabel}">
-          <div class="score-value">${score}</div><div class="score-max">/100</div>
+      <div class="score-panel score-${scoreClass}">
+        <div class="score-panel-left">
+          <div class="score-ring-lg" style="--score:${score}" role="img" aria-label="Security score ${score} of 100, ${scoreLabel}">
+            <div class="score-ring-inner"><div class="score-num">${score}</div><div class="score-den">/ 100</div></div>
+          </div>
         </div>
-        <div class="score-label">${scoreLabel}</div>
-      </div>
-      <div class="stat-card findings-card">
-        <div class="stat-card-header"><span class="stat-card-label">Findings</span></div>
-        <div class="findings-vertical">
-          <button class="finding-row high"    data-jumpsev="high"    aria-label="${high} high findings">    <span class="count">${high}</span><span class="label">High</span></button>
-          <button class="finding-row warning" data-jumpsev="warning" aria-label="${warn} warnings">           <span class="count">${warn}</span><span class="label">Warning</span></button>
-          <button class="finding-row info"    data-jumpsev="info"    aria-label="${info} info">              <span class="count">${info}</span><span class="label">Info</span></button>
-          <button class="finding-row secure"  data-jumpsev="secure"  aria-label="${secure} secure controls"> <span class="count">${secure}</span><span class="label">Secure</span></button>
+        <div class="score-panel-mid">
+          <div class="score-grade">${grade}</div>
+          <div class="score-risk">${scoreLabel} security posture</div>
+          <div class="score-sub">${totalChecks} checks evaluated · trend across scans coming soon</div>
+        </div>
+        <div class="score-panel-right">
+          <div class="risk-breakdown">
+            <button class="risk-row high"    data-jumpsev="high"    aria-label="${high} high findings"><span class="risk-dot"></span><span class="risk-name">High</span><span class="risk-count">${high}</span></button>
+            <button class="risk-row warning" data-jumpsev="warning" aria-label="${warn} medium findings"><span class="risk-dot"></span><span class="risk-name">Medium</span><span class="risk-count">${warn}</span></button>
+            <button class="risk-row info"    data-jumpsev="info"    aria-label="${info} low findings"><span class="risk-dot"></span><span class="risk-name">Low</span><span class="risk-count">${info}</span></button>
+            <button class="risk-row secure"  data-jumpsev="secure"  aria-label="${secure} informational"><span class="risk-dot"></span><span class="risk-name">Info</span><span class="risk-count">${secure}</span></button>
+          </div>
         </div>
       </div>
-      <div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Files</span></div><div class="stat-card-value">${(r.files || []).length}</div><div class="stat-card-desc">in IPA</div></div>
-      <div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Permissions</span></div><div class="stat-card-value">${Object.keys(r.permissions || {}).length}</div><div class="stat-card-desc">requested</div></div>
-      <div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Trackers</span></div><div class="stat-card-value">${(r.trackers || []).length}</div><div class="stat-card-desc">SDKs</div></div>
-      <div class="stat-card"><div class="stat-card-header"><span class="stat-card-label">Libraries</span></div><div class="stat-card-value">${(r.libraries || []).length}</div><div class="stat-card-desc">linked</div></div>
+      <div class="metric-row">
+        <div class="metric-card">
+          <div class="metric-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <div class="metric-num">${(r.files || []).length}</div>
+          <div class="metric-title">Files</div>
+          <div class="metric-sub">inside the IPA</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+          <div class="metric-num">${Object.keys(r.permissions || {}).length}</div>
+          <div class="metric-title">Permissions</div>
+          <div class="metric-sub">requested</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/></svg></div>
+          <div class="metric-num">${(r.trackers || []).length}</div>
+          <div class="metric-title">Trackers</div>
+          <div class="metric-sub">SDKs detected</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+          <div class="metric-num">${(r.libraries || []).length}</div>
+          <div class="metric-title">Libraries</div>
+          <div class="metric-sub">linked</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <div class="metric-num">${Object.keys(r.provisioning?.entitlements || {}).length}</div>
+          <div class="metric-title">Entitlements</div>
+          <div class="metric-sub">declared</div>
+        </div>
+      </div>
     `;
 
     $$('#overviewStats [data-jumpsev]').forEach(b => b.addEventListener('click', () => {
@@ -281,22 +443,76 @@ function renderOverview(r) {
         switchTab('findings');
     }));
 
-    const items = [
-        ['Bundle ID',  r.appInfo?.bundleId],
-        ['Version',    r.appInfo?.version],
-        ['Build',      r.appInfo?.build],
-        ['Min iOS',    r.appInfo?.minOS],
-        ['Executable', r.appInfo?.executableName],
-        ['Bin Type',   r.binType],
-        ['Size',       r.appInfo?.fileSize],
-        ['Xcode',      r.appInfo?.dtXcode],
+    const cs2 = r.machoSummary?.checksec || r.machoSummary?.slices?.[0]?.checksec || {};
+    const archStr = (r.machoSummary?.slices?.length ? r.machoSummary.slices.map(s => s.arch) : [r.machoSummary?.arch]).filter(Boolean).join(' · ');
+    const detailGroups = [
+        ['Identity', [
+            ['Bundle ID',  r.appInfo?.bundleId, true],
+            ['Version',    r.appInfo?.version],
+            ['Build',      r.appInfo?.build],
+            ['Executable', r.appInfo?.executableName],
+            ['Xcode',      r.appInfo?.dtXcode],
+        ]],
+        ['Platform', [
+            ['Minimum iOS', r.appInfo?.minOS ? 'iOS ' + r.appInfo.minOS + '+' : null],
+            ['Architecture', archStr],
+            ['Language', r.binType],
+            ['IPA Size', r.appInfo?.fileSize],
+        ]],
     ];
-    let infoHtml = '<div class="info-grid">';
-    for (const [k, v] of items) if (v) infoHtml += html`<div class="info-item"><label>${k}</label><div class="value">${v}</div></div>`;
-    if (r.appInfo?.sha256) infoHtml += html`<div class="info-item full"><label>SHA-256</label><div class="value hash mono">${r.appInfo.sha256}</div></div>`;
-    if (r.appInfo?.fileName) infoHtml += html`<div class="info-item full"><label>File</label><div class="value mono">${r.appInfo.fileName}</div></div>`;
+    let infoHtml = '<div class="detail-groups">';
+    for (const [title, rows] of detailGroups) {
+        const present = rows.filter(([, v]) => v);
+        if (!present.length) continue;
+        infoHtml += html`<details class="detail-group" open><summary class="detail-group-head">${title}</summary><div class="detail-group-body">`;
+        for (const [k, v, mono] of present) infoHtml += html`<div class="detail-row"><span class="detail-k">${k}</span><span class="detail-v ${mono ? 'mono' : ''}">${v}</span></div>`;
+        infoHtml += '</div></details>';
+    }
+    const secChecks = [
+        ['Code Signature', cs2.codeSigned, 'sec'],
+        ['PIE / ASLR', cs2.pie, 'sec'],
+        ['Stack Canary', cs2.stackCanary, 'sec'],
+        ['ARC', cs2.arc, 'sec'],
+        ['FairPlay Encryption', cs2.encryptedFairPlay, 'neutral'],
+    ].filter(([, v]) => v !== undefined);
+    if (secChecks.length) {
+        infoHtml += html`<details class="detail-group" open><summary class="detail-group-head">Binary Security</summary><div class="detail-group-body">`;
+        for (const [k, ok, kind] of secChecks) {
+            const chipClass = kind === 'neutral' ? 'neutral' : (ok ? 'ok' : 'no');
+            const chipText = kind === 'neutral' ? (ok ? 'Encrypted' : 'Not encrypted') : (ok ? 'Enabled' : 'Absent');
+            infoHtml += html`<div class="detail-row"><span class="detail-k">${k}</span><span class="detail-chip ${chipClass}">${chipText}</span></div>`;
+        }
+        infoHtml += '</div></details>';
+    }
+    if (r.appInfo?.sha256 || r.appInfo?.fileName) {
+        infoHtml += html`<details class="detail-group full" open><summary class="detail-group-head">Integrity</summary><div class="detail-group-body">`;
+        if (r.appInfo?.fileName) infoHtml += html`<div class="detail-row"><span class="detail-k">File</span><span class="detail-v mono">${r.appInfo.fileName}</span></div>`;
+        if (r.appInfo?.sha256) infoHtml += html`<div class="detail-row col"><span class="detail-k">SHA-256</span><span class="detail-v mono hash">${r.appInfo.sha256}</span></div>`;
+        infoHtml += '</div></details>';
+    }
     infoHtml += '</div>';
     $('#appInfoGrid').innerHTML = infoHtml;
+
+    const recentEl = $('#recentFindings');
+    if (recentEl) {
+        const g = r.groupedFindings || {};
+        const top = [...(g.high || []), ...(g.warning || []), ...(g.info || [])].slice(0, 6);
+        if (!top.length) {
+            recentEl.innerHTML = '<div class="no-data">No findings — nothing was flagged in this build.</div>';
+        } else {
+            recentEl.innerHTML = '<div class="recent-list">' + top.map(f => html`
+              <button class="recent-row" data-jumpsev="${f.severity}" type="button">
+                <span class="recent-dot ${f.severity}"></span>
+                <span class="recent-title">${f.ruleName}</span>
+                <span class="recent-sev ${f.severity}">${SEV_LABEL[f.severity] || f.severity}</span>
+              </button>`.toString()).join('') + '</div>';
+            $$('#recentFindings [data-jumpsev]').forEach(b => b.addEventListener('click', () => {
+                State.activeSeverityFilter = new Set([b.dataset.jumpsev]);
+                renderFindings(State.currentResults);
+                switchTab('findings');
+            }));
+        }
+    }
 
     const perms = Object.entries(r.permissions || {});
     $('#permissionsList').innerHTML = perms.length === 0
@@ -411,7 +627,7 @@ function renderFindings(r) {
         return html`
           <article class="finding-card ${f.severity}" data-severity="${f.severity}" data-finding-id="${idx}">
             <button class="finding-header" aria-expanded="false" aria-controls="finding-body-${idx}">
-              <span class="severity-badge ${f.severity}">${f.severity.toUpperCase()}</span>
+              <span class="severity-badge ${f.severity}">${(SEV_LABEL[f.severity] || f.severity).toUpperCase()}</span>
               <span class="finding-title">${f.ruleName}</span>
               <span class="confidence-pill ${labelFor(f.avgConfidence)}" title="Average confidence">${f.avgConfidence}%</span>
               <span class="instance-count">${f.instances.length} instance${f.instances.length > 1 ? 's' : ''}</span>
@@ -585,6 +801,19 @@ function renderBinary(r) {
     }
 }
 
+function entCategory(key) {
+    const k = String(key).toLowerCase();
+    if (k.includes('vpn')) return 'VPN';
+    if (k.includes('aps-environment') || k.includes('usernotifications') || k.includes('push')) return 'Push';
+    if (k.includes('icloud') || k.includes('ubiquity') || k.includes('cloudkit')) return 'iCloud';
+    if (k.includes('networking') || k.includes('associated-domains') || k.includes('wifi') || k.includes('hotspot')) return 'Networking';
+    if (k.includes('background') || k.includes('fetch')) return 'Background';
+    if (k.includes('get-task-allow') || k.includes('debug')) return 'Debug';
+    if (k.includes('keychain') || k.includes('security') || k.includes('data-protection') || k.includes('sandbox')) return 'Security';
+    if (k.includes('team-identifier') || k.includes('application-identifier') || k.includes('developer')) return 'Developer';
+    return 'Other';
+}
+
 function renderEntitlements(r) {
     const ent = r.provisioning?.entitlements || null;
     const provMeta = r.provisioning?.meta || null;
@@ -641,24 +870,26 @@ function renderEntitlements(r) {
         } else {
             const flagged = flagDangerousEntitlements(entSource);
             const keys = Object.keys(entSource).sort();
-            entCard.innerHTML = html`
-              <div class="ent-summary">
-                <h4>Entitlements (${keys.length})</h4>
-                <table class="ent-table"><thead><tr><th>Key</th><th>Value</th><th>Risk</th></tr></thead><tbody>
-                  ${raw(keys.map(k => {
-                      const flag = flagged.find(x => x.key === k);
-                      const v = entSource[k];
-                      return html`
-                        <tr class="${flag ? 'risk-' + flag.level : ''}">
-                          <td class="mono">${k}</td>
-                          <td>${raw(renderEntValue(v))}</td>
-                          <td>${flag ? raw('<span class="risk-badge ' + esc(flag.level) + '">' + esc(flag.reason) + '</span>') : ''}</td>
-                        </tr>`;
-                  }).join(''))}
-                </tbody></table>
-              </div>
-              ${r.entitlementsXml ? raw('<details class="ent-xml"><summary>Raw Entitlements XML</summary><pre class="mono">' + esc(r.entitlementsXml) + '</pre></details>') : ''}
-            `;
+            const cats = {};
+            for (const k of keys) { (cats[entCategory(k)] ||= []).push(k); }
+            const catOrder = ['Security', 'Networking', 'iCloud', 'Push', 'Background', 'VPN', 'Debug', 'Developer', 'Other'];
+            let entHtml = '<div class="ent-head"><h4>Entitlements (' + keys.length + ')</h4></div><div class="ent-groups">';
+            for (const cat of catOrder) {
+                if (!cats[cat]) continue;
+                entHtml += '<div class="ent-group"><div class="ent-group-title">' + esc(cat) + '<span class="ent-group-count">' + cats[cat].length + '</span></div><div class="ent-group-body">';
+                for (const k of cats[cat]) {
+                    const flag = flagged.find(x => x.key === k);
+                    entHtml += '<div class="ent-row' + (flag ? ' risk-' + flag.level : '') + '">'
+                        + '<div class="ent-row-key mono">' + esc(k) + '</div>'
+                        + '<div class="ent-row-val">' + renderEntValue(entSource[k]) + '</div>'
+                        + (flag ? '<span class="risk-badge ' + esc(flag.level) + '">' + esc(flag.reason) + '</span>' : '')
+                        + '</div>';
+                }
+                entHtml += '</div></div>';
+            }
+            entHtml += '</div>';
+            if (r.entitlementsXml) entHtml += '<details class="ent-xml"><summary>Raw Entitlements XML</summary><pre class="mono">' + esc(r.entitlementsXml) + '</pre></details>';
+            entCard.innerHTML = entHtml;
         }
     }
 }
@@ -729,7 +960,7 @@ function renderATS(r) {
 
     wrap.innerHTML = html`
       <div class="ats-overview">
-        <div class="ats-verdict ${verdictClass}">${verdictLabel}</div>
+        <div class="ats-verdict ${verdictClass}"><span class="ats-verdict-icon">${verdictClass === 'good' ? '✓' : verdictClass === 'warn' ? '!' : '✕'}</span>${verdictLabel}</div>
         <div class="ats-flags">
           <span class="ats-flag ${a.allowsArbitraryLoads ? 'bad' : 'good'}">Arbitrary Loads: ${a.allowsArbitraryLoads ? 'YES' : 'no'}</span>
           <span class="ats-flag ${a.allowsArbitraryLoadsInWebContent ? 'bad' : 'good'}">In WebContent: ${a.allowsArbitraryLoadsInWebContent ? 'YES' : 'no'}</span>
@@ -739,21 +970,21 @@ function renderATS(r) {
       </div>
       ${a.domains.length === 0
         ? '<div class="no-data">No NSExceptionDomains defined.</div>'
-        : raw(html`
-            <table class="ats-table" aria-label="ATS Exception Domains">
-              <thead><tr><th>Domain</th><th>Sub</th><th>HTTP</th><th>Min TLS</th><th>PFS</th><th>CT</th><th>Pinning</th><th>Issues</th></tr></thead>
-              <tbody>${raw(a.domains.map(d => html`
-                <tr class="${d.issues.length ? 'has-issues' : ''}">
-                  <td class="mono">${d.domain}</td>
-                  <td>${d.includesSubdomains ? '✓' : ''}</td>
-                  <td class="${d.allowsInsecureHTTPLoads ? 'bad' : ''}">${d.allowsInsecureHTTPLoads ? 'allowed' : '-'}</td>
-                  <td class="mono">${d.minimumTLSVersion}</td>
-                  <td>${d.requiresForwardSecrecy ? '✓' : raw('<span class="bad">no</span>')}</td>
-                  <td>${d.requiresCertificateTransparency ? '✓' : ''}</td>
-                  <td>${d.pinnedLeafIdentities ? raw('<span class="good">leaf</span>') : d.pinnedCAIdentities ? raw('<span class="good">CA</span>') : '-'}</td>
-                  <td>${d.issues.map(i => raw('<span class="ats-issue">' + esc(i) + '</span>')).join('')}</td>
-                </tr>`).join(''))}</tbody>
-            </table>`)}
+        : raw('<div class="ats-domains">' + a.domains.map(d => html`
+            <div class="ats-domain-card ${d.issues.length ? 'has-issues' : ''}">
+              <div class="ats-domain-head">
+                <span class="ats-domain-name mono">${d.domain}</span>
+                ${d.includesSubdomains ? raw('<span class="ats-domain-sub">+ subdomains</span>') : ''}
+              </div>
+              <div class="ats-domain-attrs">
+                <span class="ats-attr ${d.allowsInsecureHTTPLoads ? 'bad' : 'good'}">HTTP ${d.allowsInsecureHTTPLoads ? 'insecure' : 'secure'}</span>
+                <span class="ats-attr">TLS ${d.minimumTLSVersion}</span>
+                <span class="ats-attr ${d.requiresForwardSecrecy ? 'good' : 'bad'}">PFS ${d.requiresForwardSecrecy ? 'on' : 'off'}</span>
+                <span class="ats-attr ${d.requiresCertificateTransparency ? 'good' : 'neutral'}">CT ${d.requiresCertificateTransparency ? 'on' : 'off'}</span>
+                <span class="ats-attr ${(d.pinnedLeafIdentities || d.pinnedCAIdentities) ? 'good' : 'neutral'}">Pin ${d.pinnedLeafIdentities ? 'leaf' : d.pinnedCAIdentities ? 'CA' : 'none'}</span>
+              </div>
+              ${d.issues.length ? raw('<div class="ats-domain-issues">' + d.issues.map(i => '<span class="ats-issue">' + esc(i) + '</span>').join('') + '</div>') : ''}
+            </div>`.toString()).join('') + '</div>')}
     `;
 }
 
@@ -884,6 +1115,22 @@ function setupExplorerSearch() {
 }
 
 
+function updateExplorerMeta(path, size) {
+    const el = $('#explorerMeta');
+    if (!el) return;
+    const name = path.split('/').pop();
+    const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '—';
+    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '/';
+    el.innerHTML =
+        '<div class="explorer-meta-title">File Details</div>' +
+        '<div class="meta-icon">📄</div>' +
+        '<div class="meta-row"><div class="meta-k">Name</div><div class="meta-v mono">' + esc(name) + '</div></div>' +
+        '<div class="meta-row"><div class="meta-k">Type</div><div class="meta-v">' + esc(ext) + '</div></div>' +
+        '<div class="meta-row"><div class="meta-k">Size</div><div class="meta-v">' + esc(fmtSize(size)) + '</div></div>' +
+        '<div class="meta-row"><div class="meta-k">Folder</div><div class="meta-v mono">' + esc(dir) + '</div></div>' +
+        '<div class="meta-row"><div class="meta-k">Full path</div><div class="meta-v mono">' + esc(path) + '</div></div>';
+}
+
 async function openFile(path) {
     if (!path) return;
     State.currentOpenFile = path;
@@ -908,6 +1155,7 @@ async function openFile(path) {
         State.currentOpenBytes = new Uint8Array(data);
         if (dl) dl.disabled = false;
         renderFile(viewer, path, data);
+        updateExplorerMeta(path, data.byteLength);
     } catch (e) {
         viewer.innerHTML = '<div class="no-data">' + esc(e.message || 'Unable to read file') + '</div>';
     }
@@ -1348,6 +1596,16 @@ function setupTabs() {
             switchTab(TAB_NAMES[parseInt(e.key, 10) - 1]);
         }
     });
+
+    // Quick Actions tiles + "View all" section links (Overview)
+    document.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-qa]');
+        if (!el) return;
+        const a = el.dataset.qa;
+        if (a === 'export') $('#exportMenuBtn')?.click();
+        else if (a === 'newscan') $('#fileInput')?.click();
+        else switchTab(a);
+    });
 }
 
 function setupFindingsFilters() {
@@ -1361,18 +1619,6 @@ function setupFindingsFilters() {
     }));
     $('#findingsSearchInput')?.addEventListener('input', (e) => {
         State.findingsSearch = e.target.value;
-        State.findingsPage = 0;
-        renderFindings(State.currentResults);
-    });
-    $('#findingsSort')?.addEventListener('change', (e) => {
-        State.findingsSort = e.target.value;
-        renderFindings(State.currentResults);
-    });
-    const conf = $('#findingsMinConfidence');
-    const confLabel = $('#findingsMinConfidenceLabel');
-    conf?.addEventListener('input', () => {
-        State.findingsMinConfidence = parseInt(conf.value, 10) || 0;
-        if (confLabel) confLabel.textContent = '≥ ' + State.findingsMinConfidence + '%';
         State.findingsPage = 0;
         renderFindings(State.currentResults);
     });

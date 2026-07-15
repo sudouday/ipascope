@@ -6,10 +6,10 @@ const CONTENT = { x: PAGE.margin, w: PAGE.w - 2 * PAGE.margin };
 const MAX_Y = PAGE.h - PAGE.margin - 28;
 
 const COLORS = {
-    text:        [15, 20, 28],
-    textMuted:   [95, 105, 120],
-    textSubtle:  [155, 165, 180],
-    border:      [222, 226, 232],
+    text:        [17, 22, 30],
+    textMuted:   [64, 72, 86],
+    textSubtle:  [104, 114, 130],
+    border:      [214, 219, 226],
     accent:      [255, 159, 10],
     high:        [190, 18, 60],
     warning:     [180, 83, 9],
@@ -18,6 +18,9 @@ const COLORS = {
     cardBg:      [245, 247, 250],
     bgAlt:       [238, 241, 246],
 };
+
+// Display labels for the internal severity keys (matches the app UI).
+var SEV_LABEL = { high: 'High', warning: 'Medium', info: 'Low', secure: 'Info' };
 
 function rgb(c) { return c; }
 
@@ -186,7 +189,7 @@ class PDF {
 
         d.setFont('helvetica', 'bold'); d.setFontSize(11);
         d.setTextColor(...COLORS.textMuted);
-        d.text('IPA AUDITOR  /  iOS STATIC SECURITY REPORT', cx, 140, { align: 'center' });
+        d.text('IPASCOPE  /  iOS STATIC SECURITY REPORT', cx, 140, { align: 'center' });
 
         d.setFont('helvetica', 'bold'); d.setFontSize(34);
         d.setTextColor(...COLORS.text);
@@ -217,10 +220,10 @@ class PDF {
 
         const sum = r.summary || {};
         const stats = [
-            { label: 'HIGH',    val: sum.high || 0,    color: COLORS.high },
-            { label: 'WARNING', val: sum.warning || 0, color: COLORS.warning },
-            { label: 'INFO',    val: sum.info || 0,    color: COLORS.info },
-            { label: 'SECURE',  val: sum.secure || 0,  color: COLORS.secure },
+            { label: 'HIGH',   val: sum.high || 0,    color: COLORS.high },
+            { label: 'MEDIUM', val: sum.warning || 0, color: COLORS.warning },
+            { label: 'LOW',    val: sum.info || 0,    color: COLORS.info },
+            { label: 'INFO',   val: sum.secure || 0,  color: COLORS.textMuted },
         ];
         const sw = 100;
         const sgap = 12;
@@ -269,10 +272,11 @@ class PDF {
 
         d.setFont('helvetica', 'italic'); d.setFontSize(8);
         d.setTextColor(...COLORS.textSubtle);
-        d.text('Automated static analysis. Pattern matching + Mach-O / plist / CMS parsing. OWASP MASVS aligned.',
-               cx, PAGE.h - 40, { align: 'center', maxWidth: 480 });
-        d.text('Findings are indicative. Manual triage by a qualified security professional is required.',
-               cx, PAGE.h - 28, { align: 'center', maxWidth: 480 });
+        d.text('',
+               cx, PAGE.h - 36, { align: 'center', maxWidth: 480 });
+        d.setFont('helvetica', 'normal'); d.setFontSize(7);
+        d.setTextColor(...COLORS.textSubtle);
+        d.text('', cx, PAGE.h - 20, { align: 'center', maxWidth: 480 });
     }
 
     summaryPage() {
@@ -378,13 +382,13 @@ class PDF {
     findingsSection() {
         const r = this.results;
         this.addPage();
-        this.pageTitle('Findings', 'Every detected rule with all instances. Severities: High, Warning, Info, Secure.');
+        this.pageTitle('Findings', 'Detected rules with all instances. Severities: High, Medium, Low, Info.');
 
         const sections = [
-            { key: 'high',    color: COLORS.high,    title: 'High Severity' },
-            { key: 'warning', color: COLORS.warning, title: 'Warning' },
-            { key: 'info',    color: COLORS.info,    title: 'Informational' },
-            { key: 'secure',  color: COLORS.secure,  title: 'Secure Controls Detected' },
+            { key: 'high',    color: COLORS.high,      title: 'High' },
+            { key: 'warning', color: COLORS.warning,   title: 'Medium' },
+            { key: 'info',    color: COLORS.info,      title: 'Low' },
+            { key: 'secure',  color: COLORS.textMuted, title: 'Informational' },
         ];
         for (const sec of sections) {
             const groups = r.groupedFindings?.[sec.key] || [];
@@ -415,7 +419,7 @@ class PDF {
         d.roundedRect(cardX + 10, this.y + 7, sevW, 16, 8, 8, 'F');
         d.setFont('helvetica', 'bold'); d.setFontSize(7);
         d.setTextColor(255, 255, 255);
-        d.text(group.severity.toUpperCase(), cardX + 10 + sevW / 2, this.y + 17, { align: 'center' });
+        d.text((SEV_LABEL[group.severity] || group.severity).toUpperCase(), cardX + 10 + sevW / 2, this.y + 17, { align: 'center' });
 
         d.setFont('helvetica', 'bold'); d.setFontSize(11);
         d.setTextColor(...COLORS.text);
@@ -762,10 +766,6 @@ class PDF {
         this.coverPage();
         this.summaryPage();
         this.findingsSection();
-        this.binaryPage();
-        this.entitlementsPage();
-        this.atsPage();
-        this.trackersPage();
         this.drawFooter();
         return this.doc;
     }
