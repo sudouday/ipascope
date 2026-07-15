@@ -59,7 +59,7 @@ python3 -m http.server 8000
 
 ## Authors
 
-Uday Shelke & Saurabh Sanmane
+Uday Shelke, Saurabh Sanmane & Omkar Naik
 
 
 ## License
