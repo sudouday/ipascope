@@ -4,7 +4,7 @@ iOS static security analysis that runs entirely in your browser. Drop an `.ipa` 
 
 **Current release:** v0.5.0
 
-Live demo: https://ipascope.com
+Live: [https://ipascope.com](https://ipascope.vercel.app/)
 
 
 ## Screenshots
