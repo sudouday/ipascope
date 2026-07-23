@@ -61,7 +61,7 @@ python3 -m http.server 8000
 Uday Shelke, Saurabh Sanmane & Omkar Naik
 
 ## Credits
-A huge shoutout to Sandeep Wawdane—his work on APK Auditor inspired us to build an iOS counterpart. We didn't reinvent the idea; we just gave it an Apple-flavored identity crisis.
+A huge shoutout to Sandeep Wawdane—his work on APK Auditor inspired us to build an iOS counterpart.
 
 
 ## License
